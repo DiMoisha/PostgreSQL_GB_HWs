@@ -1,0 +1,25 @@
+-- Таблица подписок на пользователя 
+CREATE TABLE subscribtions_users (
+  subscribed_by_user_id INT NOT NULL,
+  subscribed_to_user_id INT NOT NULL,
+  status_id INT NOT NULL,
+  requested_at TIMESTAMP,
+  confirmed_at TIMESTAMP,
+  PRIMARY KEY (subscribed_by_user_id, subscribed_to_user_id)
+);
+
+-- Таблица подписок на сообщества
+CREATE TABLE subscribtions_communities (
+  subscribed_by_user_id INT NOT NULL,
+  subscribed_to_community_id INT NOT NULL,
+  status_id INT NOT NULL,
+  requested_at TIMESTAMP,
+  confirmed_at TIMESTAMP,
+  PRIMARY KEY (subscribed_by_user_id, subscribed_to_community_id)
+);
+
+-- Таблица статусов подписок
+CREATE TABLE subscribe_statuses (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(30) UNIQUE
+);
