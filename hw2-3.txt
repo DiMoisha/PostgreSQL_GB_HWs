@@ -1,0 +1,39 @@
+student@Ubuntu-MySQL-VirtualBox:~$ sudo su - postgres
+[sudo] пароль для student: 
+postgres@Ubuntu-MySQL-VirtualBox:~$ psql
+psql (12.7 (Ubuntu 12.7-1.pgdg16.04+1))
+Введите "help", чтобы получить справку.
+
+postgres=# CREATE DATABASE vk_staging;
+CREATE DATABASE
+postgres=# GRANT ALL PRIVILEGES ON DATABASE vk_staging to gb_user;
+GRANT
+postgres=# \q
+postgres@Ubuntu-MySQL-VirtualBox:~$ psql vk_staging < vk.dump.sql
+SET
+SET
+SET
+ set_config 
+------------
+ 
+(1 строка)
+
+SET
+SET
+SET
+SET
+SET
+SET
+CREATE TABLE
+ALTER TABLE
+CREATE SEQUENCE
+ALTER TABLE
+ALTER SEQUENCE
+CREATE TABLE
+ALTER TABLE
+CREATE TABLE
+
+......................
+
+
+
