@@ -1,0 +1,141 @@
+-- Базы данных. PostgreSQL
+-- Урок 4. Сложные запросы
+-- 1. Работаем с базой данных vk. Найти, кому принадлежат 10 самых больших видеофайлов. 
+--  В отчёт вывести идентификатор видеофайла, имя владельца, фамилию владельца, 
+--  URL основной фотографии пользователя, 
+--  URL видеофайла, размер видеофайла.
+-- Решить задачу, применив различные подходы:
+-- • Найти решение только на вложенных запросах
+-- • Найти решение с использованием временной таблицы
+-- • Найти решение с использованием общего табличного выражения
+-- • Найти решение с помощью объединения JOIN
+-- В качестве отчёта сдать код пяти запросов в виде текста. Для проверки - результат работы всех вариантов должен совпасть.
+--
+--
+-- РЕШЕНИЕ:
+--
+-- Получаем 10 самых больших видеофайлов:
+SELECT * FROM video ORDER BY size DESC LIMIT 10;
+--
+-- Структура таблиц
+--users
+--	id
+--	first_name
+--	last_name
+--	email
+--	phone
+--	main_photo_id
+--	created_at
+--	user_contacts
+--
+--video
+--	id
+--	url
+--	owner_id
+--	description
+--	uploaded_at
+--	size
+--
+--photo
+--	id
+--	url
+--	owner_id
+--	description
+--	uploaded_at
+--	size
+--	metadata
+--
+--
+-- 1 решение только на вложенных запросах
+--
+SELECT 	v.id video_id, 
+	(SELECT first_name FROM users WHERE id = v.owner_id) owner_first_name,
+	(SELECT last_name FROM users WHERE id = v.owner_id) owner_last_name,
+	(SELECT url FROM photo WHERE id = (SELECT main_photo_id FROM users WHERE id = v.owner_id)) main_photo_url,
+    	v.url video_url, 
+	v.size video_size
+FROM video v
+ORDER BY size DESC 
+LIMIT 10;
+
+
+
+-- 2 решение с использованием временной таблицы
+--
+DROP TABLE IF EXISTS tmp_video;
+CREATE TEMPORARY TABLE IF NOT EXISTS tmp_video (
+	id INT,
+	owner_id INT,
+	url VARCHAR(250),
+	size INT
+);
+
+INSERT INTO tmp_video (id, owner_id, url, size)
+SELECT id, owner_id, url, size FROM video ORDER BY size DESC LIMIT 10;
+
+-- выбор УРЛ главного фото через коррелирующий подзапрос
+SELECT v.id video_id,
+		u.first_name owner_first_name,
+		u.last_name owner_last_name,
+		(SELECT url FROM photo WHERE id = u.main_photo_id) main_photo_url,
+		v.url video_url, 
+		v.size video_size
+FROM users u INNER JOIN tmp_video v ON v.owner_id = u.id
+ORDER BY v.size DESC;
+
+-- выбор УРЛ главного фото через соединение
+SELECT v.id video_id,
+		u.first_name owner_first_name,
+		u.last_name owner_last_name,
+		ph.url main_photo_url,
+		v.url video_url, 
+		v.size video_size
+FROM users u INNER JOIN tmp_video v ON v.owner_id = u.id
+LEFT JOIN photo ph ON ph.id = u.main_photo_id
+ORDER BY v.size DESC;
+
+
+
+-- 3 решение с использованием общего табличного выражения
+--
+WITH cte_video (id, owner_id, url, size)
+AS (
+	SELECT id, owner_id, url, size FROM video ORDER BY size DESC LIMIT 10
+)
+SELECT v.id video_id,
+		u.first_name owner_first_name,
+		u.last_name owner_last_name,
+		ph.url main_photo_url,
+		v.url video_url, 
+		v.size video_size
+FROM users u INNER JOIN cte_video v ON v.owner_id = u.id
+LEFT JOIN photo ph ON ph.id = u.main_photo_id
+ORDER BY v.size DESC;
+ 
+
+
+-- 4 решение с помощью объединения JOIN
+--
+-- Вариант 1
+SELECT v.id video_id,
+		u.first_name owner_first_name,
+		u.last_name owner_last_name,
+		ph.url main_photo_url,
+		v.url video_url, 
+		v.size video_size
+FROM users u INNER JOIN (
+	SELECT id, owner_id, url, size FROM video ORDER BY size DESC LIMIT 10
+) v ON v.owner_id = u.id
+LEFT JOIN photo ph ON ph.id = u.main_photo_id
+ORDER BY v.size DESC;
+
+-- Вариант 2
+SELECT v.id video_id,
+		u.first_name owner_first_name,
+		u.last_name owner_last_name,
+		ph.url main_photo_url,
+		v.url video_url, 
+		v.size video_size
+FROM users u INNER JOIN video v ON v.owner_id = u.id
+LEFT JOIN photo ph ON ph.id = u.main_photo_id
+ORDER BY v.size DESC LIMIT 10;
