@@ -1,0 +1,375 @@
+-- Базы данных. PostgreSQL
+-- Урок 5. Управление доступом, дополнительные возможности СУБД PostgreSQL
+-- 1. Cоздать роль, определить заданный набор прав на определённые объекты.
+-- 2. Разделить таблицу на уровне хранения данных.
+-- 3. Установить заданное расширение и выполнить задачу с его использованием.
+
+-- Практическое задание (из методички)
+-- Для всех заданий в качестве отчёта необходимо приложить все выполненные команды в текстовом
+-- виде.
+-- 1. Создать роли для пользователей Федор Серов и Роман Белов. Создать роли для групп
+-- аналитиков и тестировщиков. Поместить пользователя Федор Серов в группу аналитиков а
+-- пользователя Роман Белов в группу тестировщиков. Дать группе аналитиков право только на
+-- чтение данных в БД vk. Дать группе тестировщиков все права в БД vk. Подключиться к БД vk
+-- под обоими пользователями и проверить права выполнив простые операции SQL.
+-- 2. Установить любое расширение PostgreSQL на ваш выбор.
+-- 3. Выполнить вертикальное разделение таблицы пользователей на таблицу пользователей
+-- (users) и таблицу профилей (profiles). В таблице пользователей оставить только столбцы
+-- идентификатора, имени, фамилии, электронной почты и телефона. Все остальные столбцы
+-- вместе с данными необходимо перенести в таблицу профилей.
+
+-- РЕШЕНИЕ:
+-- 1. Cоздать роль, определить заданный набор прав на определённые объекты.
+-- 1. Создать роли для пользователей Федор Серов и Роман Белов. Создать роли для групп
+-- аналитиков и тестировщиков. Поместить пользователя Федор Серов в группу аналитиков а
+-- пользователя Роман Белов в группу тестировщиков. Дать группе аналитиков право только на
+-- чтение данных в БД vk. Дать группе тестировщиков все права в БД vk. Подключиться к БД vk
+-- под обоими пользователями и проверить права выполнив простые операции SQL.
+
+
+postgres@Ubuntu-MySQL-VirtualBox:/home/student$ psql
+psql (12.7 (Ubuntu 12.7-1.pgdg16.04+1))
+Введите "help", чтобы получить справку.
+
+postgres=# \c vk
+Вы подключены к базе данных "vk" как пользователь "postgres".
+vk=# CREATE ROLE fedor_serov LOGIN;
+CREATE ROLE
+vk=# CREATE ROLE roman_belov LOGIN;
+CREATE ROLE
+vk=# ALTER ROLE fedor_serov WITH PASSWORD 'gbsecurity';
+ALTER ROLE
+vk=# ALTER ROLE roman_belov WITH PASSWORD 'gbsecurity';
+ALTER ROLE
+vk=# \du
+vk=# CREATE ROLE analytics;
+CREATE ROLE
+vk=# CREATE ROLE testers;
+CREATE ROLE
+vk=# GRANT analytics TO fedor_serov;
+GRANT ROLE
+vk=# GRANT testers TO roman_belov;
+GRANT ROLE
+vk=# \du
+vk=# GRANT SELECT ON ALL TABLES IN SCHEMA public TO analytics;
+GRANT
+vk=# GRANT ALL ON ALL TABLES IN SCHEMA public TO testers;
+GRANT
+vk=# GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO testers;
+GRANT
+vk=# \du
+vk=# 
+vk=# \x on
+Расширенный вывод включён.
+vk=# \du
+Список ролей
+-[ RECORD 1 ]-----------------------------------------------------------------------
+Имя роли   | analytics
+Атрибуты   | Вход запрещён
+Член ролей | {}
+-[ RECORD 2 ]-----------------------------------------------------------------------
+Имя роли   | developer
+Атрибуты   | Вход запрещён
+Член ролей | {}
+-[ RECORD 3 ]-----------------------------------------------------------------------
+Имя роли   | fedor_serov
+Атрибуты   | 
+Член ролей | {analytics}
+-[ RECORD 4 ]-----------------------------------------------------------------------
+Имя роли   | gb_user
+Атрибуты   | 
+Член ролей | {}
+-[ RECORD 5 ]-----------------------------------------------------------------------
+Имя роли   | ivanovs
+Атрибуты   | 
+Член ролей | {developer}
+-[ RECORD 6 ]-----------------------------------------------------------------------
+Имя роли   | petrovd
+Атрибуты   | 
+Член ролей | {developer}
+-[ RECORD 7 ]-----------------------------------------------------------------------
+Имя роли   | postgres
+Атрибуты   | Суперпользователь, Создаёт роли, Создаёт БД, Репликация, Пропускать RLS
+Член ролей | {}
+-[ RECORD 8 ]-----------------------------------------------------------------------
+Имя роли   | roman_belov
+Атрибуты   | 
+Член ролей | {testers}
+-[ RECORD 9 ]-----------------------------------------------------------------------
+Имя роли   | testers
+Атрибуты   | Вход запрещён
+Член ролей | {}
+
+vk=# \z
+vk-# \q
+postgres@Ubuntu-MySQL-VirtualBox:/home/student$ psql -U fedor_serov -d vk -h 127.0.0.1 -W
+Пароль: 
+psql (12.7 (Ubuntu 12.7-1.pgdg16.04+1))
+SSL-соединение (протокол: TLSv1.2, шифр: ECDHE-RSA-AES256-GCM-SHA384, бит: 256, сжатие: выкл.)
+Введите "help", чтобы получить справку.
+
+vk=> SELECT * FROM users LIMIT 3;
+vk=> UPDATE users SET last_name='Tyson' WHERE id=2;
+ОШИБКА:  нет доступа к таблице users
+vk=> \q
+postgres@Ubuntu-MySQL-VirtualBox:/home/student$ psql -U roman_belov -d vk -h 127.0.0.1 -W
+Пароль: 
+psql (12.7 (Ubuntu 12.7-1.pgdg16.04+1))
+SSL-соединение (протокол: TLSv1.2, шифр: ECDHE-RSA-AES256-GCM-SHA384, бит: 256, сжатие: выкл.)
+Введите "help", чтобы получить справку.
+
+vk=> SELECT * FROM users LIMIT 3;
+vk=> UPDATE users SET last_name='Tyson' WHERE id=2;
+UPDATE 1
+vk=> SELECT * FROM users LIMIT 3;
+vk=> SELECT * FROM users WHERE id=2;
+vk=> \q
+postgres@Ubuntu-MySQL-VirtualBox:/home/student$ 
+
+
+-- Код с урока
+student@Ubuntu-MySQL-VirtualBox:~$ sudo su postgres
+[sudo] пароль для student: 
+postgres@Ubuntu-MySQL-VirtualBox:/home/student$ psql
+psql (12.7 (Ubuntu 12.7-1.pgdg16.04+1))
+Введите "help", чтобы получить справку.
+
+postgres=# \c
+Вы подключены к базе данных "postgres" как пользователь "postgres".
+postgres=# \c vk
+Вы подключены к базе данных "vk" как пользователь "postgres".
+vk=# CREATE ROLE developer;
+CREATE ROLE
+vk=# SELECT * FROM pg_roles
+vk-# SELECT * FROM pg_roles;
+ОШИБКА:  ошибка синтаксиса (примерное положение: "SELECT")
+СТРОКА 2: SELECT * FROM pg_roles;
+          ^
+vk=# SELECT * FROM pg_roles
+SELECT * FROM pg_role;
+ОШИБКА:  ошибка синтаксиса (примерное положение: "SELECT")
+СТРОКА 2: SELECT * FROM pg_role;
+          ^
+vk=# SELECT * FROM pg_roles
+vk=#SELECT * FROM pg_roles;
+ОШИБКА:  ошибка синтаксиса (примерное положение: "=#")
+СТРОКА 2: vk=#SELECT * FROM pg_roles;
+            ^
+vk=# SELECT * FROM pg_roles;
+vk=# \x on;
+Расширенный вывод включён.
+vk=# SELECT * FROM pg_roles;
+vk=# \du
+Список ролей
+-[ RECORD 1 ]-----------------------------------------------------------------------
+Имя роли   | developer
+Атрибуты   | Вход запрещён
+Член ролей | {}
+-[ RECORD 2 ]-----------------------------------------------------------------------
+Имя роли   | gb_user
+Атрибуты   | 
+Член ролей | {}
+-[ RECORD 3 ]-----------------------------------------------------------------------
+Имя роли   | postgres
+Атрибуты   | Суперпользователь, Создаёт роли, Создаёт БД, Репликация, Пропускать RLS
+Член ролей | {}
+
+vk=# CREATE ROLE ivanovs LOGIN;
+CREATE ROLE
+vk=# CREATE USER petrovd;
+CREATE ROLE
+vk=# \du
+Список ролей
+-[ RECORD 1 ]-----------------------------------------------------------------------
+Имя роли   | developer
+Атрибуты   | Вход запрещён
+Член ролей | {}
+-[ RECORD 2 ]-----------------------------------------------------------------------
+Имя роли   | gb_user
+Атрибуты   | 
+Член ролей | {}
+-[ RECORD 3 ]-----------------------------------------------------------------------
+Имя роли   | ivanovs
+Атрибуты   | 
+Член ролей | {}
+-[ RECORD 4 ]-----------------------------------------------------------------------
+Имя роли   | petrovd
+Атрибуты   | 
+Член ролей | {}
+-[ RECORD 5 ]-----------------------------------------------------------------------
+Имя роли   | postgres
+Атрибуты   | Суперпользователь, Создаёт роли, Создаёт БД, Репликация, Пропускать RLS
+Член ролей | {}
+
+vk=# ALTER ROLE ivanovs WITH PASSWORD 'gbsecurity';
+ALTER ROLE
+vk=# ALTER ROLE petrovd WITH PASSWORD 'gbsecurity';
+ALTER ROLE
+vk=# GRANT developer TO ivanovs, petrovd;
+GRANT ROLE
+vk=# \ du
+неверная команда \
+Введите \? для получения справки.
+vk=# \du
+Список ролей
+-[ RECORD 1 ]-----------------------------------------------------------------------
+Имя роли   | developer
+Атрибуты   | Вход запрещён
+Член ролей | {}
+-[ RECORD 2 ]-----------------------------------------------------------------------
+Имя роли   | gb_user
+Атрибуты   | 
+Член ролей | {}
+-[ RECORD 3 ]-----------------------------------------------------------------------
+Имя роли   | ivanovs
+Атрибуты   | 
+Член ролей | {developer}
+-[ RECORD 4 ]-----------------------------------------------------------------------
+Имя роли   | petrovd
+Атрибуты   | 
+Член ролей | {developer}
+-[ RECORD 5 ]-----------------------------------------------------------------------
+Имя роли   | postgres
+Атрибуты   | Суперпользователь, Создаёт роли, Создаёт БД, Репликация, Пропускать RLS
+Член ролей | {}
+
+vk=# GRANT ALL ON ALL TABLES IN CHEMA public TO developer;
+ОШИБКА:  ошибка синтаксиса (примерное положение: "CHEMA")
+СТРОКА 1: GRANT ALL ON ALL TABLES IN CHEMA public TO developer;
+                                     ^
+vk=# GRANT ALL ON ALL TABLES IN SCHEMA public TO developer;
+GRANT
+vk=# \du
+Список ролей
+-[ RECORD 1 ]-----------------------------------------------------------------------
+Имя роли   | developer
+Атрибуты   | Вход запрещён
+Член ролей | {}
+-[ RECORD 2 ]-----------------------------------------------------------------------
+Имя роли   | gb_user
+Атрибуты   | 
+Член ролей | {}
+-[ RECORD 3 ]-----------------------------------------------------------------------
+Имя роли   | ivanovs
+Атрибуты   | 
+Член ролей | {developer}
+-[ RECORD 4 ]-----------------------------------------------------------------------
+Имя роли   | petrovd
+Атрибуты   | 
+Член ролей | {developer}
+-[ RECORD 5 ]-----------------------------------------------------------------------
+Имя роли   | postgres
+Атрибуты   | Суперпользователь, Создаёт роли, Создаёт БД, Репликация, Пропускать RLS
+Член ролей | {}
+
+vk=# GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO developer;
+GRANT
+vk=# \du
+Список ролей
+-[ RECORD 1 ]-----------------------------------------------------------------------
+Имя роли   | developer
+Атрибуты   | Вход запрещён
+Член ролей | {}
+-[ RECORD 2 ]-----------------------------------------------------------------------
+Имя роли   | gb_user
+Атрибуты   | 
+Член ролей | {}
+-[ RECORD 3 ]-----------------------------------------------------------------------
+Имя роли   | ivanovs
+Атрибуты   | 
+Член ролей | {developer}
+-[ RECORD 4 ]-----------------------------------------------------------------------
+Имя роли   | petrovd
+Атрибуты   | 
+Член ролей | {developer}
+-[ RECORD 5 ]-----------------------------------------------------------------------
+Имя роли   | postgres
+Атрибуты   | Суперпользователь, Создаёт роли, Создаёт БД, Репликация, Пропускать RLS
+Член ролей | {}
+
+vk=# \z
+vk=# \?
+[1]+  Остановлено  psql
+postgres@Ubuntu-MySQL-VirtualBox:/home/student$ psql -U ivanovs -d vk -h 127.0.0.1 -W
+Пароль: 
+psql: ошибка: ВАЖНО:  пользователь "ivanovs" не прошёл проверку подлинности (по паролю)
+ВАЖНО:  пользователь "ivanovs" не прошёл проверку подлинности (по паролю)
+postgres@Ubuntu-MySQL-VirtualBox:/home/student$ psql -U ivanovs -d vk -h 127.0.0.1 -W
+Пароль: 
+psql (12.7 (Ubuntu 12.7-1.pgdg16.04+1))
+SSL-соединение (протокол: TLSv1.2, шифр: ECDHE-RSA-AES256-GCM-SHA384, бит: 256, сжатие: выкл.)
+Введите "help", чтобы получить справку.
+
+vk=> SELECT * FROM messages;
+vk=> UPDATE users SET  last_name='Briggs' WHERE id=3;
+UPDATE 1
+vk=> SELECT * FROM users WHERE id=3;
+vk=> 
+
+
+
+-- 2. Разделить таблицу на уровне хранения данных.
+-- 3. Выполнить вертикальное разделение таблицы пользователей на таблицу пользователей
+-- (users) и таблицу профилей (profiles). В таблице пользователей оставить только столбцы
+-- идентификатора, имени, фамилии, электронной почты и телефона. Все остальные столбцы
+-- вместе с данными необходимо перенести в таблицу профилей.
+
+Задание выполнял в pgAdmin 4
+
+CREATE TABLE "profiles" (
+  id SERIAL PRIMARY KEY,
+  user_id integer NOT NULL,
+  main_photo_id integer NULL,
+  created_at varchar(255)
+);
+
+INSERT INTO profiles (user_id, main_photo_id, created_at)
+SELECT id, main_photo_id, created_at FROM users;
+
+ALTER TABLE users DROP COLUMN main_photo_id;
+ALTER TABLE users DROP COLUMN created_at;
+
+ALTER TABLE profiles 
+  ADD CONSTRAINT profiles_user_id_fk 
+  FOREIGN KEY (user_id) 
+  REFERENCES users (id)
+  ON DELETE CASCADE;
+
+SELECT * FROM profiles;
+
+
+
+
+-- 3. Установить заданное расширение и выполнить задачу с его использованием.
+-- 2. Установить любое расширение PostgreSQL на ваш выбор.
+
+vk=# \q
+postgres@Ubuntu-MySQL-VirtualBox:/home/student$ psql
+psql (12.7 (Ubuntu 12.7-1.pgdg16.04+1))
+Введите "help", чтобы получить справку.
+
+postgres=# \x
+Расширенный вывод включён.
+postgres=# SELECT * FROM pg_available_extensions LIMIT 3;
+-[ RECORD 1 ]-----+----------------------------------------------------------------
+name              | lo
+default_version   | 1.1
+installed_version | 
+comment           | Large Object maintenance
+-[ RECORD 2 ]-----+----------------------------------------------------------------
+name              | dict_xsyn
+default_version   | 1.0
+installed_version | 
+comment           | text search dictionary template for extended synonym processing
+-[ RECORD 3 ]-----+----------------------------------------------------------------
+name              | autoinc
+default_version   | 1.0
+installed_version | 
+comment           | functions for autoincrementing fields
+
+postgres=# SELECT * FROM pg_extension WHERE extname like 'autoinc%';
+(0 строк)
+
+postgres=# CREATE EXTENSION autoinc;
+CREATE EXTENSION
+postgres=# 
