@@ -1,0 +1,353 @@
+Базы данных. PostgreSQL
+Урок 6. Пользовательские функции, хранимые процедуры, триггеры и представления
+1. Создать пользовательскую функцию.
+2. Создать хранимую процедуру.
+3. Создать триггер.
+4. Создать представление.
+
+Практическое задание
+Работаем с базой данных vk. В качестве отчёта необходимо сдать код выполняемых команд в
+текстовом формате.
+© geekbrains.ru 15
+1. Создать функцию, которая по идентификатору пользователя ищет того, кто написал
+пользователю наибольшее количество сообщений. В результат нужно вывести идентификатор
+искомого пользователя.
+2. Создать процедуру, которая проверяет владельца фотографий, которые указаны в качестве
+основных фотографий пользователей в таблице профилей. Если пользователь в профилях не
+является владельцем своей основной фотографии, тогда для него нужно записать NULL в
+столбце main_photo_id.
+3. Создать триггер на обновление для таблицы профилей, который не разрешает внести в
+столбец main_photo_id идентификатор фотографии, если данный пользователь не является
+ее владельцем. Проверить работу триггера вставкой записей с корректными и некорректными
+значениями.
+4. Создать два представления для таблицы видео. Одно представление должно быть
+неизменяемым, другое - изменяемым. Проверить изменяемость второго представления.
+
+
+РЕШЕНИЕ: 
+
+Все задания выполнял в Query Tool pgAdmin 4 
+
+1. Создать функцию, которая по идентификатору пользователя ищет того, кто написал
+пользователю наибольшее количество сообщений. В результат нужно вывести идентификатор
+искомого пользователя.
+
+CREATE OR REPLACE FUNCTION get_user_id_by_max_sent_messages(user_id INTEGER)
+RETURNS INTEGER AS
+$$
+SELECT from_user_id
+FROM messages
+WHERE to_user_id = user_id
+GROUP BY from_user_id
+ORDER BY COUNT(*) DESC, from_user_id
+LIMIT 1;
+$$
+LANGUAGE SQL;
+
+Для проверки:
+select get_user_id_by_max_sent_messages(98) as max_active_user
+
+Результат:
+
+max_active_user
+integer
+---------------
+44
+(1 row)
+
+
+2. Создать процедуру, которая проверяет владельца фотографий, которые указаны в качестве
+основных фотографий пользователей в таблице профилей. Если пользователь в профилях не
+является владельцем своей основной фотографии, тогда для него нужно записать NULL в
+столбце main_photo_id.
+
+-- Для конкретного пользователя
+CREATE OR REPLACE PROCEDURE profile_main_photo_cleanup_by_user_id(
+t_user_id INTEGER)
+LANGUAGE SQL AS
+$$
+UPDATE profiles 
+SET main_photo_id = NULL
+FROM profiles p JOIN photo f ON f.id = p.main_photo_id AND f.owner_id != p.user_id
+WHERE p.user_id = t_user_id;
+$$;
+
+-- Для всех пользователей
+CREATE OR REPLACE PROCEDURE profiles_main_photo_cleanup()
+LANGUAGE SQL AS
+$$
+UPDATE profiles 
+SET main_photo_id = NULL
+FROM profiles p JOIN photo f ON f.id = p.main_photo_id AND f.owner_id != p.user_id;
+$$;
+
+-- Для всех пользователей через цикл
+CREATE OR REPLACE PROCEDURE profiles_main_photo_cleanup_by_loop()
+LANGUAGE PLPGSQL AS
+$$
+DECLARE photo_row RECORD;
+BEGIN
+FOR photo_row IN	
+SELECT * FROM photo
+LOOP
+UPDATE profiles 
+SET main_photo_id = NULL 
+WHERE main_photo_id = photo_row.id AND user_id != photo_row.owner_id;
+END LOOP;
+COMMIT;
+END;
+$$;
+
+--Для проверки:
+--Находим юзеров, у которых "не своя" фотка:
+select p.* from profiles p join photo f on f.id=p.main_photo_id and f.owner_id != p.user_id;
+--результат:
+1	19	16	"2022-06-05 16:19:03"
+2	20	71	"2021-08-03 07:00:38"
+3	21	19	"2022-08-21 22:03:55"
+4	22	61	"2022-12-13 00:41:17"
+5	23	78	"2022-08-10 03:18:25"
+6	24	90	"2021-09-17 03:56:47"
+7	25	51	"2023-04-03 19:08:17"
+8	26	39	"2021-12-30 08:31:05"
+9	27	74	"2021-11-19 04:44:18"
+10	28	15	"2022-06-18 21:41:07"
+11	29	19	"2023-03-03 01:29:26"
+12	30	20	"2023-03-04 05:55:00"
+13	31	38	"2022-05-14 05:53:04"
+14	32	63	"2021-05-05 10:48:41"
+15	33	73	"2021-08-03 19:32:25"
+16	34	21	"2022-10-07 02:33:00"
+17	35	89	"2021-11-28 16:39:41"
+18	36	67	"2021-09-01 20:25:03"
+19	37	28	"2021-05-10 23:44:13"
+20	38	18	"2022-01-27 23:30:34"
+21	39	40	"2022-01-26 05:38:08"
+22	40	100	"2021-12-06 00:10:32"
+23	41	44	"2022-08-26 09:01:45"
+24	42	61	"2022-04-14 23:00:03"
+25	43	47	"2022-04-01 07:32:31"
+26	53	1	"2022-08-26 12:44:28"
+27	54	24	"2022-04-13 16:21:37"
+28	55	54	"2022-01-21 07:27:30"
+29	56	11	"2022-02-25 16:18:59"
+30	57	44	"2021-08-11 01:49:34"
+31	58	49	"2021-11-24 10:07:21"
+32	59	9	"2021-09-12 21:02:15"
+33	60	91	"2022-05-18 08:19:00"
+34	61	11	"2021-07-24 11:30:31"
+35	62	35	"2021-12-02 16:38:04"
+36	63	9	"2023-02-16 16:34:43"
+37	64	7	"2022-05-05 15:23:58"
+38	65	66	"2021-11-13 21:02:59"
+39	66	43	"2021-12-30 23:30:26"
+40	67	97	"2022-03-31 21:39:30"
+41	68	47	"2022-10-26 12:20:18"
+42	69	51	"2021-11-14 02:41:09"
+43	70	3	"2022-08-07 00:08:27"
+44	71	27	"2022-08-08 09:58:47"
+45	72	23	"2021-10-16 22:23:54"
+46	1	9	"2022-12-07 04:08:53"
+47	3	44	"2022-02-13 07:47:43"
+48	4	57	"2022-10-29 05:35:31"
+49	5	95	"2022-02-26 07:58:53"
+50	6	4	"2023-01-10 23:19:12"
+51	7	25	"2022-06-11 22:38:40"
+52	8	81	"2023-01-16 00:30:29"
+53	9	99	"2022-08-28 15:36:35"
+55	11	19	"2021-12-10 20:04:47"
+56	12	68	"2021-05-04 03:01:07"
+57	13	19	"2023-02-21 10:33:48"
+58	14	58	"2022-10-13 20:26:51"
+59	15	62	"2023-01-01 06:24:04"
+60	16	4	"2022-06-17 06:18:47"
+61	17	6	"2022-03-08 15:30:53"
+62	18	18	"2023-01-12 19:17:52"
+63	2	32	"2023-01-10 10:45:37"
+64	44	7	"2021-05-22 20:11:17"
+65	45	91	"2022-08-23 18:20:08"
+66	46	81	"2022-06-18 09:52:33"
+67	47	24	"2021-12-04 07:55:39"
+68	48	14	"2023-03-03 13:41:16"
+69	49	45	"2022-10-01 15:12:38"
+70	50	99	"2022-08-12 10:15:32"
+71	51	43	"2022-04-16 03:36:11"
+72	52	71	"2021-06-04 15:51:28"
+73	73	5	"2021-12-19 04:55:17"
+74	74	6	"2022-08-30 10:50:33"
+75	75	84	"2021-08-12 12:03:40"
+76	76	57	"2022-03-29 11:06:49"
+77	77	71	"2023-01-31 17:03:17"
+78	78	14	"2023-02-23 15:07:38"
+79	79	4	"2021-12-01 14:56:46"
+80	80	97	"2022-08-31 16:49:27"
+81	81	79	"2022-06-19 02:05:39"
+82	82	42	"2021-08-15 16:37:10"
+83	83	63	"2022-06-26 10:50:42"
+84	84	27	"2022-09-07 22:45:30"
+85	85	74	"2022-06-29 14:51:24"
+86	86	50	"2022-08-22 16:23:13"
+87	87	87	"2021-07-03 19:08:36"
+88	88	53	"2023-01-27 14:30:51"
+89	89	62	"2021-10-14 11:47:12"
+90	90	48	"2022-11-30 00:07:33"
+91	91	12	"2022-12-23 11:39:58"
+92	92	15	"2021-07-25 20:17:36"
+93	93	96	"2022-12-29 09:39:59"
+94	94	36	"2023-04-23 03:34:12"
+95	95	44	"2023-02-03 17:48:26"
+96	96	15	"2021-07-29 07:34:51"
+97	97	47	"2023-04-08 04:16:08"
+98	98	21	"2022-09-07 00:46:53"
+99	99	3	"2021-09-05 21:16:53"
+100	100	9	"2022-11-17 21:10:45"
+
+-- Берем первые записи первого запроса и сверяем
+select * from photo where id in (16,71,19,61,78,90,51); --user_id: 19,20,21,22,23,24
+--результат:
+16	"https://vk.ru/photos/1c2.jpg"	81	"Donec egestas. Aliquam nec enim. Nunc"	"2021-11-02 19:18:20"	24952	"{""id"" : 16, ""url"" : ""https://vk.ru/photos/1c2.jpg"", ""size"" : 24952}"
+19	"https://vk.ru/photos/8u.jpg"	77	"massa. Quisque porttitor eros"	"2022-11-14 12:47:39"	33241	"{""id"" : 19, ""url"" : ""https://vk.ru/photos/8u.jpg"", ""size"" : 33241}"
+51	"https://vk.ru/photos/12df.jpg"	33	"sed dictum eleifend, nunc risus varius orci,"	"2022-08-31 12:03:16"	21924	"{""id"" : 51, ""url"" : ""https://vk.ru/photos/12df.jpg"", ""size"" : 21924}"
+71	"https://vk.ru/photos/9wer.jpg"	29	"tristique neque venenatis lacus. Etiam bibendum fermentum"	"2023-01-04 19:24:53"	53349	"{""id"" : 71, ""url"" : ""https://vk.ru/photos/9wer.jpg"", ""size"" : 53349}"
+78	"https://vk.ru/photos/6lk.jpg"	7	"velit. Pellentesque ultricies dignissim lacus. Aliquam"	"2023-04-16 20:43:42"	42154	"{""id"" : 78, ""url"" : ""https://vk.ru/photos/6lk.jpg"", ""size"" : 42154}"
+61	"https://vk.ru/photos/1rte7.jpg"	73	"magna. Duis dignissim tempor arcu. Vestibulum"	"2021-11-02 12:33:45"	73	"{""id"" : 61, ""url"" : ""https://vk.ru/photos/1rte7.jpg"", ""size"" : 73}"
+90	"https://vk.ru/photos/7rty.jpg"	19	"justo. Proin non massa non ante bibendum"	"2022-07-05 20:17:04"	90133	"{""id"" : 90, ""url"" : ""https://vk.ru/photos/7rty.jpg"", ""size"" : 90133}"
+
+-- как видно, дейтсвительно владелец не "тот"
+
+-- Теперь у этих юзеров убираем фотки
+-- для начала пробуем у первого
+CALL profile_main_photo_cleanup_by_user_id(19);
+
+-- и проверяем
+select * from profiles where user_id = 19;
+
+-- результат:
+id	user_id		main_photo_id	created_at		
+1	19		[null]		"2022-06-05 16:19:03"
+
+
+-- потом через ХПшку с циклом у всех
+CALL profiles_main_photo_cleanup_by_loop();
+
+-- и снова проверяем
+select p.* from profiles p join photo f on f.id=p.main_photo_id and f.owner_id != p.user_id;
+
+-- Результат: 
+(0 rows)
+
+
+
+3. Создать триггер на обновление для таблицы профилей, который не разрешает внести в
+столбец main_photo_id идентификатор фотографии, если данный пользователь не является
+ее владельцем. Проверить работу триггера вставкой записей с корректными и некорректными
+значениями.
+
+CREATE OR REPLACE FUNCTION update_profiles_main_photo_id_trigger()
+RETURNS TRIGGER AS
+$$
+DECLARE is_found BOOLEAN;
+BEGIN
+is_found := EXISTS(SELECT * FROM photo WHERE id = NEW.main_photo_id AND owner_id = NEW.user_id);
+IF NOT is_found THEN
+NEW.main_photo_id := NULL;
+END IF;
+RETURN NEW;
+END
+$$
+LANGUAGE PLPGSQL;
+
+CREATE TRIGGER check_profiles_on_update BEFORE UPDATE ON profiles
+FOR EACH ROW
+EXECUTE FUNCTION update_profiles_main_photo_id_trigger();
+
+CREATE TRIGGER check_profiles_on_insert BEFORE INSERT ON profiles
+FOR EACH ROW
+EXECUTE FUNCTION update_profiles_main_photo_id_trigger();
+
+-- проверяем:
+select * from photo where owner_id = 2;
+-- результат:
+"id"	"url"	"owner_id"	"description"	"uploaded_at"	"size"	"metadata"
+36	"https://vk.ru/photos/8dfg.jpg"	2	"sit amet nulla. Donec non justo. Proin non massa"	"2021-10-25 10:06:56"	7699	"{""id"" : 36, ""url"" : ""https://vk.ru/photos/8dfg.jpg"", ""size"" : 7699}"
+202	"https://vk.ru/photos/1erwt3.jpg"	2	"vitae, posuere at, velit. Cras lorem lorem, luctus ut,"	"2022-05-03 07:43:43"	96953	"{""id"" : 202, ""url"" : ""https://vk.ru/photos/1erwt3.jpg"", ""size"" : 96953}"
+295	"https://vk.ru/photos/19zxcv.jpg"	2	"Maecenas ornare egestas ligula. Nullam feugiat"	"2022-08-09 13:41:25"	75641	"{""id"" : 295, ""url"" : ""https://vk.ru/photos/19zxcv.jpg"", ""size"" : 75641}"
+
+-- сначала проверим обновление записи с "не той" фоткой:
+update profiles set main_photo_id = 67 where user_id = 2;
+select * from profiles where user_id = 2;
+--результ:
+"id"	"user_id"	"main_photo_id"	"created_at"
+63	2		[null]	"2023-01-10 10:45:37"
+
+-- теперь верное значение на апдейт:
+update profiles set main_photo_id = 36 where user_id = 2;
+select * from profiles where user_id = 2;
+
+-- результат: 
+"id"	"user_id"	"main_photo_id"	"created_at"
+63	2	36	"2023-01-10 10:45:37"
+  
+-- проверим неверный инсерт
+insert into users (first_name, last_name, email) values ('Piotr', 'Doroshenko', 'piotr@cossack.com');
+-- 201
+insert into profiles (user_id, main_photo_id) values (201, 1111);
+select * from profiles where user_id=201;
+-- результат:
+"id"	"user_id"	"main_photo_id"	"created_at"
+101	201		[null]		[null]
+
+--верный:
+insert into users (first_name, last_name, email) values ('Ivan', 'Sirko', 'wolf@sirko.com');
+-- 202
+insert into photo (owner_id, url, description, size, uploaded_at) values (202, 'urldfasf', 'descr', 231, '2022-05-21');
+select * from photo where owner_id=202;
+-- результат:
+"id"	"url"	"owner_id"	"description"	"uploaded_at"	"size"	"metadata"
+2161	"urldfasf"	202	"descr"	"2022-05-21 00:00:00"	231	
+
+insert into profiles (user_id, main_photo_id) values (202, 2161);
+select * from profiles where user_id=202;
+-- res:
+"id"	"user_id"	"main_photo_id"	"created_at"
+102	  202		2161	[null]
+
+
+
+
+4. Создать два представления для таблицы видео. Одно представление должно быть
+неизменяемым, другое - изменяемым. Проверить изменяемость второго представления.
+
+
+-- Неизменяемое представление, т.к. используются две таблицы
+CREATE VIEW video_with_owner AS
+SELECT v.id, url, owner_id, CONCAT(first_name, ' ', last_name) owner_name, description, size
+FROM video v JOIN users u ON v.owner_id = u.id;
+
+select * from video_with_owner;
+update video_with_owner set owner_id=999 where owner_id=88;
+
+ERROR: ОШИБКА:  изменить данные в представлении "video_with_owner" нельзя
+DETAIL:  Представления, выбирающие данные не из одной таблицы или представления, не обновляются автоматически.
+HINT:  Чтобы представление допускало изменение данных, установите триггер INSTEAD OF UPDATE или безусловное правило ON UPDATE DO INSTEAD.
+
+
+SQL state: 55000
+
+
+-- Изменяемое, т.к. удовлетворяет всем условиям изменяемого представления
+CREATE VIEW video_big_size AS
+SELECT id, url, owner_id, description, size
+FROM video
+WHERE owner_id is not null AND size > 90000;
+
+select * from video_big_size;
+update video_big_size set size = 90500 where size = 90487;
+
+UPDATE 1
+
+Query returned successfully in 36 msec.
+
+select * from video_big_size;
+
+
