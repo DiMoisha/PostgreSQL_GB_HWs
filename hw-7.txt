@@ -1,0 +1,141 @@
+Базы данных. PostgreSQL
+Урок 7. Транзакции, блокировки, оконные (аналитические) функции
+Работаем с базой данных vk. В качестве отчета необходимо сдать код выполняемых команд
+в текстовом файле.
+
+1. Удалить пользователей, которые не имеют ни одной дружеской связи с подтвержденным статусом. 
+	Нужно удалить все данные, связанные с такими пользователями. Для решения используйте транзакцию.
+
+2. Создать запрос, который для всех пользователей покажет количество загруженных фотографий и видеофайлов (отдельными столбцами), 
+	а также ранг каждого пользователя по этим значениям (также отдельно для фотографий и видеофайлов). 
+	Большие значения соответствуют более высокому рангу. Решить задание необходимо одним запросом с использованием оконных функций.
+
+3. Для каждой группы (сообщества) найти средний размер видеофайлов, загруженных участниками группы, 
+	а также вывести идентификатор, имя и фамилию пользователя, который загрузил самый большой по размеру видеофайл. 
+	Решить задание необходимо одним запросом с использованием оконных функций.
+
+
+РЕШЕНИЕ:
+
+-- 1. Удалить пользователей, которые не имеют ни одной дружеской связи с подтвержденным статусом. 
+-- Нужно удалить все данные, связанные с такими пользователями. Для решения используйте транзакцию.
+BEGIN;
+-- Подтвержденный статус id=3 
+
+-- Ставим самый строгий уровень изоляции транзакций
+SET TRANSACTION ISOLATION LEVEL serializable;
+
+-- Решение с использованием временной таблицы, где хранятся "неправильные" неподтвержденные пользователи
+-- берем всех пользователей: и тех, кто предложил дружить и тех, кто согласился
+DROP TABLE IF EXISTS nonconfirmed_users;
+CREATE TEMPORARY TABLE nonconfirmed_users (id INT);
+INSERT INTO nonconfirmed_users 
+ SELECT id FROM users WHERE id NOT IN 
+ 	(SELECT requested_by_user_id id FROM friendship WHERE status_id = 3 UNION 
+		SELECT requested_to_user_id id FROM friendship WHERE status_id = 3);
+
+-- Список таблиц, где нужно удалить данные пользователей в порядке релевантности:
+-- public.subscribtions_users
+-- public.subscribtions_communities
+-- public.communities_users
+-- public.friendship
+-- public.messages
+-- public.video
+-- public.photo
+-- public.profiles
+-- public.users
+
+-- Поочередно удаляем данные из таблиц
+DELETE FROM subscribtions_users WHERE subscribed_by_user_id IN (SELECT id FROM nonconfirmed_users) 
+	OR subscribed_to_user_id IN (SELECT id FROM nonconfirmed_users);
+	
+-- Непонятна глубина удаления данных. Предположим удаляем все подчистую, т.е. игнорируем юзеров в сообществах
+-- и удаляем сообщества "неверных" пользователей и подписки на эти сообщества
+DELETE FROM subscribtions_communities WHERE subscribed_by_user_id IN (SELECT id FROM nonconfirmed_users)
+	OR subscribed_to_community_id IN (SELECT id FROM communities WHERE creator_id IN (SELECT id FROM nonconfirmed_users));
+DELETE FROM communities_users WHERE user_id IN (SELECT id FROM nonconfirmed_users) 
+	OR community_id IN (SELECT id FROM communities WHERE creator_id IN (SELECT id FROM nonconfirmed_users));
+DELETE FROM communities WHERE creator_id IN (SELECT id FROM nonconfirmed_users);
+DELETE FROM friendship WHERE requested_by_user_id IN (SELECT id FROM nonconfirmed_users) 
+	OR requested_to_user_id IN (SELECT id FROM nonconfirmed_users);
+DELETE FROM messages WHERE from_user_id IN (SELECT id FROM nonconfirmed_users) 
+	OR to_user_id IN (SELECT id FROM nonconfirmed_users);
+DELETE FROM video WHERE owner_id IN (SELECT id FROM nonconfirmed_users);
+DELETE FROM photo WHERE owner_id IN (SELECT id FROM nonconfirmed_users);
+UPDATE profiles SET main_photo_id = NULL WHERE user_id IN (SELECT id FROM nonconfirmed_users);
+DELETE FROM profiles WHERE user_id IN (SELECT id FROM nonconfirmed_users);
+DELETE FROM users WHERE id IN (SELECT id FROM nonconfirmed_users);
+
+-- Чистим за собой
+DROP TABLE IF EXISTS nonconfirmed_users;
+
+-- COMMIT;
+ROLLBACK;
+
+
+
+
+--2. Создать запрос, который для всех пользователей покажет количество загруженных фотографий и видеофайлов (отдельными столбцами), 
+--	а также ранг каждого пользователя по этим значениям (также отдельно для фотографий и видеофайлов). 
+--	Большие значения соответствуют более высокому рангу. Решить задание необходимо одним запросом с использованием оконных функций.
+
+WITH users_with_video (owner_id, video_count)
+AS 
+(
+	SELECT DISTINCT u.id, COUNT(v.id) OVER (PARTITION BY v.owner_id)
+	FROM users u LEFT JOIN video v ON u.id = v.owner_id
+),
+users_with_photo (owner_id, photo_count)
+AS 
+(
+	SELECT DISTINCT u.id, COUNT(ph.id) OVER (PARTITION BY ph.owner_id)
+	FROM users u LEFT JOIN photo ph ON u.id = ph.owner_id
+)
+SELECT  users_with_video.owner_id, 
+		video_count,
+		photo_count,
+		DENSE_RANK() OVER (ORDER BY video_count) AS user_video_rank, 
+		DENSE_RANK() OVER (ORDER BY photo_count) AS user_photo_rank
+FROM users_with_video JOIN users_with_photo ON users_with_video.owner_id = users_with_photo.owner_id
+ORDER BY owner_id;
+
+
+
+-- 3. Для каждой группы (сообщества) найти средний размер видеофайлов, загруженных участниками группы, 
+--	а также вывести идентификатор, имя и фамилию пользователя, который загрузил самый большой по размеру видеофайл. 
+--	Решить задание необходимо одним запросом с использованием оконных функций.
+
+-- SELECT DISTINCT
+-- 	cs.id,
+-- 	cs.name,
+-- 	COUNT(v.id) OVER (PARTITION BY cs.id) video_by_community
+-- FROM communities cs LEFT JOIN communities_users cu	ON cu.community_id = cs.id
+-- 					LEFT JOIN video v ON v.owner_id = cu.user_id
+-- ORDER BY video_by_community DESC;
+
+WITH community_video
+AS
+( 
+	SELECT DISTINCT	
+		cs.id, 
+		cs.name, 
+		AVG(v.size) OVER (PARTITION BY cs.id) avg_video_size_by_community,
+		MAX(v.size) OVER (PARTITION BY cs.id) max_video_size_by_community
+	FROM communities cs LEFT JOIN communities_users cu	ON cu.community_id = cs.id
+						LEFT JOIN video v ON v.owner_id = cu.user_id
+	ORDER BY avg_video_size_by_community DESC
+)
+SELECT DISTINCT
+	cv.id, 
+	cv.name,
+	cv.avg_video_size_by_community,
+	cv.max_video_size_by_community,
+	u.id max_video_user_id, 
+	u.first_name max_video_user_first_name,
+	u.last_name max_video_user_last_name
+FROM community_video cv LEFT JOIN video v ON cv.max_video_size_by_community = v.size
+						LEFT JOIN users u ON v.owner_id = u.id
+ORDER BY cv.id;
+
+
+
